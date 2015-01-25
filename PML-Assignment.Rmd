@@ -1,0 +1,140 @@
+---
+title: "JHU- Practical Machine Learning - Prediction Assignment"
+date: "Friday, January 23, 2015"
+output: html_document
+---
+
+## Synopsis
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+## Data Source
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
+## Preparing the Data
+
+Download the data (if MAC add method="CURL")
+
+```{r,echo=TRUE}
+# remove the '#' to enable the code to download the file.
+
+#fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+#download.file(fileUrl, destfile = "pml-training.csv")
+
+#fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+#download.file(fileUrl, destfile = "pml-testing.csv")
+
+```
+
+Load the package and the library
+
+Two important package will be used on this assignment, caret and randomForest. Other useful libraries were also used.
+
+
+```{r,echo=TRUE}
+library(ElemStatLearn)
+library(caret)
+library(rpart)
+library(randomForest)
+set.seed(357)
+
+```
+
+
+##Cleaning the Data and Create the Partitions
+
+Load the data and clean, Check if there is a problem with the data set and remove all columns with less than 60% of data.
+
+
+```{r, echo=TRUE}
+fileSource <-"pml-training.csv"
+pml_CSV <- read.csv(fileSource, header=TRUE, sep=",", na.strings=c("NA",""))
+pml_CSV <- pml_CSV[,-1] # Remove the first column that represents a ID Row
+
+
+inTrain = createDataPartition(pml_CSV$classe, p=0.60, list=FALSE)
+training = pml_CSV[inTrain,]
+validating = pml_CSV[-inTrain,]
+
+
+sum((colSums(!is.na(training[,-ncol(training)])) < 0.6*nrow(training)))
+Keep <- c((colSums(!is.na(training[,-ncol(training)])) >= 0.6*nrow(training)))
+training   <-  training[,Keep]
+validating <- validating[,Keep]
+```
+
+
+##Model and Evaluation
+
+1. Using Random Forest, we proceed with the training the model using training data set and use the importance to verify the variable produced by random forest. 
+
+
+```{r, echo=TRUE}
+model <- randomForest(classe~.,data=training)
+print(model)
+
+importance(model)
+```
+
+2. Evaluate the results through Confusion Matrix and confirm the accuracy
+
+```{r, echo=TRUE}
+confusionMatrix(predict(model,newdata=validating[,-ncol(validating)]),validating$classe)
+
+accuracy<-c(as.numeric(predict(model,newdata=validating[,-ncol(validating)])==validating$classe))
+accuracy<-sum(accuracy)*100/nrow(validating)
+```
+
+
+
+## Testing the Model
+
+Create a test data set using pml-testing.csv and clean.
+
+```{r, echo=TRUE}
+fileSource <-"pml-testing.csv"
+pml_CSV <- read.csv(fileSource, header=TRUE, sep=",", na.strings=c("NA",""))
+
+pml_CSV <- pml_CSV[,-1] # Remove the first column that represents a ID Row
+pml_CSV <- pml_CSV[ , Keep] # Keep the same columns of testing dataset
+pml_CSV <- pml_CSV[,-ncol(pml_CSV)] # Remove the problem ID
+
+# Coerce testing dataset to same class and strucuture of training dataset 
+testing <- rbind(training[100, -59] , pml_CSV) 
+# Apply the ID Row to row.names and 100 for dummy row from testing dataset 
+row.names(testing) <- c(100, 1:20)
+
+
+```
+
+Show the prediction.
+
+```{r, echo=TRUE}
+predictions <- predict(model,newdata=testing[-1,])
+print(predictions)
+
+```
+
+Generate Files and submit (submitting the 20 predictions to Coursera and got 20/20)
+
+```{r, echo=FALSE}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictions)
+
+```
